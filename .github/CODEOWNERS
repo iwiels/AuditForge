@@ -1,0 +1,12 @@
+# Default ownership until team ownership is split further.
+* @victo
+
+# Release and security-sensitive areas
+/.github/workflows/ @victo
+/install.sh @victo
+/install.ps1 @victo
+/internal/mcp/ @victo
+/internal/components/mcp/ @victo
+/internal/update/ @victo
+/internal/backup/ @victo
+/internal/memory/ @victo

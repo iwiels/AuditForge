@@ -1,0 +1,17 @@
+﻿description = "Buscar en el contexto histÃ³rico de auditorÃ­as anteriores"
+prompt = """
+BuscÃ¡ en la memoria persistente del orquestador usando la herramienta MCP security-audit:
+
+Consultas Ãºtiles:
+- "authorized engagement [target]" â†’ verificar autorizaciÃ³n
+- "[target] findings" â†’ hallazgos histÃ³ricos
+- "[target] CRÃTICO" â†’ solo hallazgos crÃ­ticos previos
+- "[campaign] session" â†’ sesiones de una campaÃ±a
+
+Query a buscar: {{args}}
+
+PresentÃ¡ los resultados con:
+- QuÃ© sesiones existen para el target/query
+- Hallazgos relevantes no resueltos
+- Contexto que el equipo actual deberÃ­a tener en cuenta
+"""

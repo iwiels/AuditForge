@@ -1,0 +1,39 @@
+﻿description = "AnÃ¡lisis web profundo â€” authn, authz, inputs, JS, APIs"
+prompt = """
+AnÃ¡lisis web profundo del target. Primero leer el Asset Inventory del scout si existe.
+
+Analizar (metodologÃ­a OWASP Testing Guide v4.2):
+
+AUTENTICACIÃ“N:
+- JWT: decodificar header (alg:none = CRÃTICO), verificar exp y claims sensibles en payload
+- Cookies: Secure/HttpOnly/SameSite flags, nombres que revelan stack
+- Login: Â¿enumera usuarios? Â¿rate limiting? Â¿brute force protection?
+- Password reset: Â¿token en URL? Â¿token predecible?
+
+CONTROL DE ACCESO:
+- IDOR: IDs en rutas (/api/users/1234) â€” Â¿predecibles? Â¿ownership check?
+- Privilege escalation: parÃ¡metros de rol en request body
+- Mass assignment: Â¿acepta role, is_admin, credits extra?
+
+HEADERS DE SEGURIDAD (revisar en cada respuesta):
+- CSP: ausente o unsafe-inline = MEDIO
+- HSTS: ausente = BAJO/MEDIO
+- X-Frame-Options: ausente = MEDIO (clickjacking)
+- X-Content-Type-Options: ausente = BAJO
+
+INPUTS (conceptual â€” no ejecutar payloads):
+- SQLi: comportamiento diferente ante comillas en query params
+- XSS: Â¿input del usuario aparece sin escapar en respuesta?
+- SSRF: params que reciben URLs (?url=, ?webhook=, ?import=)
+- GraphQL: Â¿introspection habilitada? Â¿sin rate limiting?
+
+JAVASCRIPT:
+- Endpoints hardcodeados en cÃ³digo cliente
+- Tokens o API keys en scripts
+- LÃ³gica de autorizaciÃ³n que solo estÃ¡ en el frontend
+
+Para cada hallazgo: severidad, status (observed/suspected/validated), CWE, evidencia, vector.
+LÃ­mite: status suspected si no hay evidencia directa confirmada.
+
+Target: {{args}}
+"""

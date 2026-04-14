@@ -1,0 +1,12 @@
+name: Feature request
+description: Request a new defensive security capability
+title: "feature: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal

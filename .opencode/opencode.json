@@ -1,0 +1,27 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "chrome-devtools": {
+      "type": "local",
+      "command": [
+        "cmd",
+        "/c",
+        "chrome-devtools-mcp"
+      ],
+      "enabled": true,
+      "timeout": 30000,
+      "environment": {
+        "SystemRoot": "C:\\Windows",
+        "PROGRAMFILES": "C:\\Program Files"
+      }
+    },
+    "security-audit": {
+      "type": "local",
+      "command": [
+        "C:\\Users\\victo\\GitHub\\orquestador_auditor\\orquestador-auditor-desktop.exe",
+        "--mcp"
+      ],
+      "enabled": true
+    }
+  }
+}

@@ -1,0 +1,37 @@
+﻿description = "AuditorÃ­a de cÃ³digo fuente, dependencias y pipeline CI/CD"
+prompt = """
+AuditorÃ­a de supply chain y cÃ³digo fuente del repositorio o path indicado.
+
+INVENTARIO DE DEPENDENCIAS:
+- Identificar ecosistema: package.json, requirements.txt, go.mod, pom.xml, Cargo.toml
+- Lockfile: Â¿presente? Â¿coherente con el manifest?
+- Dependencias con * o >= sin upper bound = riesgo
+- Dependencias desde GitHub sin tag ni hash = riesgo
+
+SECRETOS EN CÃ“DIGO:
+Buscar en cÃ³digo fuente e historial de git:
+- Claves AWS: AKIA[0-9A-Z]{16}
+- Tokens GitHub: ghp_
+- DATABASE_URL con credenciales
+- JWT secrets: SECRET_KEY=, JWT_SECRET=
+- -----BEGIN RSA PRIVATE KEY-----
+â†’ Reportar tipo y ubicaciÃ³n, NUNCA el valor completo
+
+PIPELINE CI/CD:
+- pull_request_target sin restricciÃ³n de checkout = CRÃTICO (GitHub Actions RCE)
+- Secrets accesibles en PRs de forks
+- uses: actions/nombre@main (sin hash o versiÃ³n fija)
+- Deploy automÃ¡tico sin aprobaciÃ³n
+
+REVISIÃ“N DE CÃ“DIGO (patrones CWE):
+- CWE-89 SQLi: queries con concatenaciÃ³n string
+- CWE-79 XSS: innerHTML con input del usuario
+- CWE-78 Command Injection: subprocess con shell=True + input externo
+- CWE-22 Path Traversal: construcciÃ³n de paths con input sin sanitizar
+- CWE-502 Insecure Deserialization: pickle.loads(external), eval(input)
+- CWE-798 Hardcoded Secrets: credenciales en cÃ³digo fuente
+- CWE-639 IDOR: handlers sin verificaciÃ³n de ownership
+
+Para cada hallazgo: archivo:lÃ­nea, patrÃ³n vulnerable, severidad, remediaciÃ³n con cÃ³digo.
+Path: {{args}}
+"""

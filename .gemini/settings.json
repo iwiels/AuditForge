@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "security-audit": {
+      "command": "C:\\Users\\victo\\GitHub\\orquestador_auditor\\orquestador-auditor.exe",
+      "args": [
+        "--mcp"
+      ]
+    }
+  }
+}

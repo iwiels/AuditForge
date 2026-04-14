@@ -1,0 +1,31 @@
+﻿description = "Recon y surface discovery â€” primer agente del Security Audit Team"
+prompt = """
+EjecutÃ¡ recon completo del target autorizado. Sos el primer agente del pipeline.
+
+Antes de empezar:
+1. VerificÃ¡ autorizaciÃ³n buscando en memoria: authorized engagement {{args}}
+   Si no hay entrada â†’ detenete y pedila al usuario.
+2. GenerÃ¡ SESSION_ID: {{args}}-<fecha-hoy>-<4chars>
+
+OSINT pasivo (sin tocar el target):
+- Certificate Transparency via crt.sh â€” subdominios expuestos
+- DNS: SPF/DMARC/DKIM, MX records, historial
+- Shodan/Censys: infraestructura ya indexada
+- GitHub: buscar "{{args}}" password, "{{args}}" api_key, filename:.env
+- Wayback Machine: endpoints histÃ³ricos accesibles
+
+Surface discovery (observacional):
+- Headers HTTP: Server, X-Powered-By, Cookie flags, CSP, HSTS
+- Archivos: /robots.txt, /security.txt, /.well-known/, /.git/ (si accesible = CRÃTICO)
+- Rutas API: /api/, /graphql, /swagger.json, /openapi.yaml
+- Error pages que revelan stack o versiones
+
+Para cada hallazgo documenta:
+- Severidad: CRÃTICO | ALTO | MEDIO | BAJO | INFORMATIVO
+- Status: observed | suspected | validated
+- Evidencia concreta (no teÃ³rica)
+- Vector especÃ­fico
+
+EntregÃ¡: Asset Inventory priorizado P0-P3 y vectores para deep-web.
+Target: {{args}}
+"""

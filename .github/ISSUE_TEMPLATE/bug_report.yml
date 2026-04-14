@@ -1,0 +1,16 @@
+name: Bug report
+description: Report a defect in audit, sync, install, or MCP behavior
+title: "bug: "
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+  - type: textarea
+    id: impact
+    attributes:
+      label: Security or operator impact

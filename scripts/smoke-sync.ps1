@@ -1,0 +1,3 @@
+$ErrorActionPreference = 'Stop'
+go test ./...
+go run ./cmd/orquestador-auditor sync --all
