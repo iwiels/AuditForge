@@ -1,0 +1,48 @@
+﻿description = "SÃ­ntesis de todos los hallazgos del equipo y reporte final"
+prompt = """
+SintetizÃ¡ todos los hallazgos del Security Audit Team en un reporte profesional.
+
+PROCESO:
+1. RecopilÃ¡ todos los hallazgos de la sesiÃ³n actual de todos los agentes
+2. Deduplicar: mismo vector reportado por mÃºltiples agentes â†’ un solo finding
+3. Verificar calidad:
+   - CRÃTICO/ALTO con status:suspected â†’ mover a "requiere validaciÃ³n adicional"
+   - Solo evidencia concreta en la secciÃ³n principal
+4. Calcular CVSS v3.1 para todos los CRÃTICO y ALTO
+5. Mapear a CWE y OWASP Top 10 2021
+
+ESTRUCTURA DEL REPORTE:
+
+# Reporte de AuditorÃ­a de Seguridad
+**Target:** [target]
+**MetodologÃ­a:** OWASP Testing Guide v4.2 / PTES / OSSTMM 3
+
+## Resumen ejecutivo
+[Para management no tÃ©cnico. Â¿QuÃ© se revisÃ³? Â¿Estado general? Â¿QuÃ© es urgente?]
+
+## Hallazgos consolidados
+| ID | Agente | Severidad | CVSS | TÃ­tulo | Estado |
+
+## Detalle (CRÃTICO â†’ ALTO â†’ MEDIO â†’ BAJO â†’ INFO)
+Para cada finding:
+- DescripciÃ³n tÃ©cnica
+- Evidencia observable
+- Impacto en tÃ©rminos de negocio
+- RemediaciÃ³n con pasos concretos (incluir cÃ³digo cuando aplica)
+- Referencias: CWE, OWASP
+
+## Requiere validaciÃ³n adicional
+[Hallazgos con status:suspected]
+
+## Recomendaciones estratÃ©gicas
+[Cambios de arquitectura â€” no solo fixes puntuales]
+
+## Superficie analizada y alcance negativo
+[QuÃ© se revisÃ³ y quÃ© quedÃ³ explÃ­citamente fuera]
+
+CALIDAD MÃNIMA:
+- Sin findings sin evidencia en la secciÃ³n principal
+- CVSS calculado para CRÃTICO y ALTO
+- RemediaciÃ³n accionable en cada finding
+- Resumen ejecutivo sin jerga tÃ©cnica
+"""

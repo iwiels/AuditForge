@@ -1,0 +1,27 @@
+project_name: orquestador-auditor
+
+builds:
+  - main: ./cmd/orquestador-auditor
+    binary: orquestador-auditor
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  github:
+    owner: victo
+    name: orquestador_auditor

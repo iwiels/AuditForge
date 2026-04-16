@@ -1,0 +1,63 @@
+# Orquestador Auditor - Git Ignore
+# Mantenelo limpio, mantenelo seguro.
+
+# --- Binarios y Artefactos de Build ---
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+orquestador-auditor
+orquestador-auditor-desktop
+# Para cuando compilamos en Linux/Mac
+bin/
+# Archivos temporales de compilación
+_obj/
+_test/
+
+# --- Go Específico (Caché y Dependencias) ---
+# Patrones recursivos por si se crean en subdirectorios
+**/.gocache/
+**/.gotmp/
+**/vendor/
+# Archivos de coverage y profiling
+*.out
+*.test
+*.prof
+
+# --- Logs y Debugging ---
+*.log
+mcp-error.log
+npm-debug.log*
+
+# --- Datos Operativos y Sesiones (Evidencia) ---
+# Muy importante: nunca subir runs ni resultados reales
+.orquestador/
+scratch/*
+!scratch/README.md
+!scratch/.gitkeep
+# Bases de datos resultantes (SQLite)
+*.db
+*.db-journal
+*.sqlite*
+
+# --- Configuración y Secretos ---
+.env
+.env.local
+*.key
+*.pem
+certs/
+secrets/
+
+# --- Entornos de IA y Editores ---
+.gemini/
+.qwen/
+.opencode/node_modules/
+.vscode/
+.idea/
+*.swp
+*.bak
+
+# --- Sistema Operativo ---
+.DS_Store
+Thumbs.db

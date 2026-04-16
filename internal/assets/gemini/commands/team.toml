@@ -1,0 +1,41 @@
+﻿description = "Lanzar el Security Audit Team completo en pipeline coordinado"
+prompt = """
+CoordinÃ¡ el Security Audit Team completo contra el target autorizado.
+
+TARGET: {{args}}
+
+PASO 1 â€” AUTORIZACIÃ“N Y SETUP:
+BuscÃ¡ en memoria: "authorized engagement {{args}}"
+Si no existe â†’ pedÃ­ autorizaciÃ³n explÃ­cita antes de continuar.
+GenerÃ¡ SESSION_ID: {{args}}-<YYYYMMDD>-<4chars>
+
+PASO 2 â€” CONTEXTO HISTÃ“RICO:
+BuscÃ¡ en memoria: "{{args}} findings" y "{{args}} session"
+ResumÃ­ lo encontrado: sesiones previas, hallazgos histÃ³ricos sin resolver.
+
+PASO 3 â€” RECON Y SUPERFICIE (security-scout):
+EjecutÃ¡ el anÃ¡lisis de recon siguiendo la skill surface-discovery y osint-passive.
+Para cada hallazgo: severidad, status, evidencia, vector.
+Identificar quÃ© vectores requieren anÃ¡lisis web profundo.
+
+PASO 4 â€” WEB Y APIS (security-web):
+Tomando como base los hallazgos del paso 3, ejecutÃ¡ anÃ¡lisis web siguiendo web-triage.
+Priorizar los vectores P0/P1 identificados en el recon.
+LÃ­mite: no ejecutar payloads activos â€” evidencia observable Ãºnicamente.
+
+PASO 5 â€” CÃ“DIGO Y SUPPLY CHAIN (security-code):
+Si hay cÃ³digo fuente disponible, ejecutÃ¡ code-review y supply-chain-triage.
+Enfocarte en los componentes seÃ±alados por los hallazgos de los pasos anteriores.
+
+PASO 6 â€” COMPLIANCE Y ARQUITECTURA (security-ops):
+Leer todos los hallazgos acumulados.
+Mapear a OWASP ASVS v4 y NIST CSF.
+Identificar gaps de diseÃ±o sistÃ©micos que explican mÃºltiples vulnerabilidades.
+
+PASO 7 â€” REPORTE FINAL (security-report):
+Sintetizar todos los hallazgos del equipo.
+Deduplicar, calcular CVSS, mapear CWE, producir reporte completo.
+
+REGLA CRÃTICA: Si cualquier paso produce un hallazgo CRÃTICO â†’ notificar al usuario
+inmediatamente antes de continuar al siguiente paso.
+"""

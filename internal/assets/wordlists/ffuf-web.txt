@@ -1,0 +1,17 @@
+admin
+api
+api-docs
+auth
+config
+debug
+graphql
+health
+internal
+login
+metrics
+openapi.json
+private
+swagger
+swagger.json
+v1
+v2

@@ -1,0 +1,29 @@
+schema: spec-driven
+
+context: |
+  Tech stack: Go 1.24+, stdlib, MCP, JSON state, Markdown reports
+  Architecture: multi-agent orchestrator for security audits
+  Testing: go test ./...
+  Style: gofmt, idiomatic Go
+
+strict_tdd: true
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Identify affected packages and docs
+  specs:
+    - Use Given/When/Then format for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Include sequence diagrams or textual flow diagrams for complex flows
+    - Document architecture decisions with rationale
+  tasks:
+    - Group tasks by phase (foundation, parsers, agents, reporting, docs, testing)
+    - Use hierarchical numbering (1.1, 1.2, etc.)
+    - Keep tasks small enough to complete in one session
+  apply:
+    - Follow gentle-ai structure and existing Go package boundaries
+  verify:
+    - Run go tests if Go toolchain exists
+    - Compare implementation against every spec scenario
