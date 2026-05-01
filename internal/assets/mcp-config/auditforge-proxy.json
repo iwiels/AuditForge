@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "auditforge-proxy": {
+      "command": "go",
+      "args": [
+        "run",
+        "C:/Users/victo/GitHub/orquestador_auditor/cmd/proxy-server"
+      ],
+      "env": {
+        "PROXY_PORT": "8080",
+        "DB_PATH": "./auditforge-proxy.db"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
