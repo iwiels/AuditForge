@@ -36,7 +36,7 @@ AuditForge injects into OpenCode a team of specialized agents operating via **sh
 
 ## Capabilities: Skills & Tools
 
-### Security Skills (29 total)
+### Security Skills
 
 **Recon & Surface:**
 - `surface-discovery` —robots.txt, security.txt, DNS, certificate transparency
@@ -50,12 +50,9 @@ AuditForge injects into OpenCode a team of specialized agents operating via **sh
 - `web-js-intel` — JavaScript endpoint extraction, deobfuscation
 - `js-deobfuscation-intel` — Advanced JS deobfuscation techniques
 - `browser-api-mapping` — Chrome DevTools API surface inventory
-- `request-interception-manipulation` — **NEW** Fetch/XHR interception, replay, token manipulation
-- `websocket-security` — **NEW** CSWSH, injection, authorization analysis
 - `proxy-capture-replay` — mitmproxy capture, HAR export, replay verification
 
 **Authentication & Tokens:**
-- `jwt-jwks-analysis` — **NEW** JWT algorithm confusion, key injection, kid path traversal
 - `advanced-auth-bypass` — OAuth/SAML, CSRF, session fixation
 
 **API Security:**
@@ -69,7 +66,6 @@ AuditForge injects into OpenCode a team of specialized agents operating via **sh
 
 **Proxy & Interception:**
 - `auditforge-proxy` — **NEW** Native HTTP/HTTPS proxy with MCP interface for traffic interception
-- `smart-replay-engine` — **NEW** Differential analysis engine for automated vulnerability detection (IDOR, auth bypass, privilege escalation)
 - `proxy-capture-replay` — mitmproxy capture, HAR export, replay verification
 
 **Code & Supply Chain:**
@@ -113,12 +109,6 @@ proxy.request.modify({
   body: JSON.stringify({ role: "admin" })
 })
 
-// Smart Replay with differential analysis
-proxy.replay.execute({
-  request_id: "abc-123",
-  smart_mode: true  // Auto-generates mutations for IDOR/auth testing
-})
-
 // Review automated findings
 proxy.findings.list({ severity: "CRITICAL" })
 ```
@@ -128,8 +118,6 @@ proxy.findings.list({ severity: "CRITICAL" })
 - ✅ Intercepts traffic from **any application** (browsers, mobile apps, CLI tools)
 - ✅ **MITM HTTPS** with dynamic certificate generation
 - ✅ **Burp-style interception**: pause, modify, forward, drop
-- ✅ **Smart Replay Engine**: automated mutation testing with differential analysis
-- ✅ **Auto-detection**: IDOR, auth bypass, privilege escalation, info disclosure
 - ✅ **Persistent storage** in SQLite with HAR export
 
 **Manual Start (if needed):**
@@ -258,7 +246,6 @@ In OpenCode, use MCP tools:
 ```javascript
 proxy.intercept.enable({})
 proxy.history.search({limit: 20})
-proxy.replay.execute({request_id: "abc-123", smart_mode: true})
 proxy.findings.list({severity: "CRITICAL"})
 ```
 
@@ -269,26 +256,24 @@ proxy.findings.list({severity: "CRITICAL"})
 ```
 auditforge/
 ├── cmd/                    # CLI and MCP server entrypoints
-│   └── proxy-server/       # NEW: Native HTTP/HTTPS proxy with Smart Replay
+│   └── proxy-server/       # Native HTTP/HTTPS proxy with MCP interface
 │       ├── main.go
 │       ├── proxy_core.go
-│       ├── smart_replay.go
 │       ├── storage.go
 │       ├── mcp_tools.go
 │       ├── setup.sh
 │       └── README.md
 ├── internal/
 │   ├── assets/
-│   │   ├── skills/         # 29 security skills (27 + 2 new)
-│   │   │   ├── auditforge-proxy/      # NEW: Proxy integration skill
-│   │   │   └── smart-replay-engine/   # NEW: Differential analysis skill
+│   │   ├── skills/         # Security skills
+│   │   │   └── auditforge-proxy/      # Proxy integration skill
 │   │   ├── opencode/       # OpenCode agents & commands
 │   │   └── prompts/        # System prompts
 │   ├── orchestrator/       # Injection engine
 │   ├── mcp/                # MCP protocol server
 │   ├── memory/             # Shared memory store (Engram-style)
 │   ├── model/              # Domain types
-│   └── catalog/            # Skills registry
+│   └── runtime/            # Run manifests, policy and correlation
 ├── docs/                   # Architecture & operational docs
 ├── install.sh              # Binary installer
 ├── install-assets.sh       # Assets installer (Linux/macOS)
@@ -304,10 +289,8 @@ auditforge/
 - [**Security Operations Policy**](docs/security-ops.md)
 - [**Agent Team Protocol**](AGENTS.md)
 - [**Chrome DevTools MCP Guide**](#chrome-devtools-mcp-integration)
-- [**AuditForge Proxy Setup**](cmd/proxy-server/README.md) - HTTP/HTTPS proxy with Smart Replay Engine
-- [**Smart Replay Guide**](cmd/proxy-server/EXAMPLE.md) - Practical audit example
+- [**AuditForge Proxy Setup**](cmd/proxy-server/README.md) - HTTP/HTTPS proxy with MCP interface
 - [**Proxy Integration Skill**](internal/assets/skills/auditforge-proxy/SKILL.md)
-- [**Smart Replay Skill**](internal/assets/skills/smart-replay-engine/SKILL.md)
 
 ---
 

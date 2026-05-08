@@ -4,8 +4,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"strings"
 	"time"
-	_ "github.com/mattn/go-sqlite3"
+
+	_ "modernc.org/sqlite"
 )
 
 // ProxyStorage maneja la persistencia en SQLite
@@ -15,13 +18,24 @@ type ProxyStorage struct {
 
 // NewProxyStorage crea una nueva instancia de storage
 func NewProxyStorage(dbPath string) (*ProxyStorage, error) {
-	db, err := sql.Open("sqlite3", dbPath)
+	cleanPath := filepath.Clean(dbPath)
+	db, err := sql.Open("sqlite", cleanPath+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, err
 	}
 
+	// Set connection limits
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(5 * time.Minute)
+
 	storage := &ProxyStorage{db: db}
+	if err := db.Ping(); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	if err := storage.createTables(); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
 
@@ -31,6 +45,8 @@ func NewProxyStorage(dbPath string) (*ProxyStorage, error) {
 // createTables crea las tablas necesarias
 func (s *ProxyStorage) createTables() error {
 	schema := `
+	PRAGMA foreign_keys = ON;
+
 	CREATE TABLE IF NOT EXISTS requests (
 		id TEXT PRIMARY KEY,
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -79,11 +95,23 @@ func (s *ProxyStorage) createTables() error {
 
 // SaveRequest guarda un request/response
 func (s *ProxyStorage) SaveRequest(rr *RequestResponse) error {
-	reqHeaders, _ := json.Marshal(rr.RequestHeaders)
-	respHeaders, _ := json.Marshal(rr.ResponseHeaders)
-	tags, _ := json.Marshal(rr.Tags)
+	if rr == nil {
+		return fmt.Errorf("request response is nil")
+	}
+	reqHeaders, err := json.Marshal(rr.RequestHeaders)
+	if err != nil {
+		return fmt.Errorf("marshal request headers: %w", err)
+	}
+	respHeaders, err := json.Marshal(rr.ResponseHeaders)
+	if err != nil {
+		return fmt.Errorf("marshal response headers: %w", err)
+	}
+	tags, err := json.Marshal(rr.Tags)
+	if err != nil {
+		return fmt.Errorf("marshal request tags: %w", err)
+	}
 
-	_, err := s.db.Exec(`
+	_, err = s.db.Exec(`
 		INSERT OR REPLACE INTO requests 
 		(id, timestamp, method, url, host, path, query, request_headers, request_body,
 		 response_status, response_headers, response_body, duration_ms, is_intercepted, intercept_action, tags)
@@ -114,9 +142,15 @@ func (s *ProxyStorage) GetRequest(id string) (*RequestResponse, error) {
 		return nil, err
 	}
 
-	json.Unmarshal([]byte(reqHeaders), &rr.RequestHeaders)
-	json.Unmarshal([]byte(respHeaders), &rr.ResponseHeaders)
-	json.Unmarshal([]byte(tags), &rr.Tags)
+	if err := json.Unmarshal([]byte(reqHeaders), &rr.RequestHeaders); err != nil {
+		return nil, fmt.Errorf("unmarshal request headers: %w", err)
+	}
+	if err := json.Unmarshal([]byte(respHeaders), &rr.ResponseHeaders); err != nil {
+		return nil, fmt.Errorf("unmarshal response headers: %w", err)
+	}
+	if err := json.Unmarshal([]byte(tags), &rr.Tags); err != nil {
+		return nil, fmt.Errorf("unmarshal request tags: %w", err)
+	}
 
 	return &rr, nil
 }
@@ -173,9 +207,12 @@ func (s *ProxyStorage) SearchRequests(filters RequestFilters) ([]*RequestRespons
 		err := rows.Scan(&rr.ID, &rr.Timestamp, &rr.Method, &rr.URL, &rr.Host, &rr.Path,
 			&rr.ResponseStatus, &rr.Duration, &rr.IsIntercepted)
 		if err != nil {
-			continue
+			return nil, err
 		}
 		results = append(results, &rr)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return results, nil
@@ -198,9 +235,15 @@ func (s *ProxyStorage) DeleteOldRequests(olderThan time.Duration) error {
 
 // SaveFinding guarda un hallazgo de seguridad
 func (s *ProxyStorage) SaveFinding(finding *SecurityFinding) error {
-	evidence, _ := json.Marshal(finding.Evidence)
+	if finding == nil {
+		return fmt.Errorf("finding is nil")
+	}
+	evidence, err := json.Marshal(finding.Evidence)
+	if err != nil {
+		return fmt.Errorf("marshal evidence: %w", err)
+	}
 
-	_, err := s.db.Exec(`
+	_, err = s.db.Exec(`
 		INSERT INTO findings (id, request_id, finding_type, severity, description, evidence, cwe)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		finding.ID, finding.RequestID, finding.Type, finding.Severity,
@@ -225,8 +268,7 @@ func (s *ProxyStorage) GetFindings(filters FindingFilters) ([]*SecurityFinding, 
 		args = append(args, filters.Severity)
 	}
 	if filters.MinSeverity != "" {
-		query += " AND severity IN (SELECT severity FROM severity_order WHERE priority >= (SELECT priority FROM severity_order WHERE severity = ?))"
-		args = append(args, filters.MinSeverity)
+		query += " AND " + severityClause(filters.MinSeverity)
 	}
 
 	query += " ORDER BY created_at DESC"
@@ -243,10 +285,15 @@ func (s *ProxyStorage) GetFindings(filters FindingFilters) ([]*SecurityFinding, 
 		var evidence string
 		err := rows.Scan(&f.ID, &f.RequestID, &f.Type, &f.Severity, &f.Description, &evidence, &f.CWE, &f.CreatedAt)
 		if err != nil {
-			continue
+			return nil, err
 		}
-		json.Unmarshal([]byte(evidence), &f.Evidence)
+		if err := json.Unmarshal([]byte(evidence), &f.Evidence); err != nil {
+			return nil, err
+		}
 		results = append(results, &f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return results, nil
@@ -291,8 +338,13 @@ func (s *ProxyStorage) GetStats() (*ProxyStats, error) {
 	for rows.Next() {
 		var severity string
 		var count int
-		rows.Scan(&severity, &count)
+		if err := rows.Scan(&severity, &count); err != nil {
+			return nil, err
+		}
 		stats.FindingsBySeverity[severity] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return stats, nil
@@ -301,6 +353,38 @@ func (s *ProxyStorage) GetStats() (*ProxyStats, error) {
 // Close cierra la conexión a la base de datos
 func (s *ProxyStorage) Close() error {
 	return s.db.Close()
+}
+
+func severityClause(minSeverity string) string {
+	levels := []string{"info", "low", "medium", "high", "critical"}
+	min := normalizeSeverity(minSeverity)
+	if min == "" {
+		return "1=1"
+	}
+	start := 0
+	for i, level := range levels {
+		if level == min {
+			start = i
+			break
+		}
+	}
+	quoted := make([]string, 0, len(levels)-start)
+	for _, level := range levels[start:] {
+		quoted = append(quoted, fmt.Sprintf("'%s'", level))
+	}
+	return fmt.Sprintf("LOWER(severity) IN (%s)", strings.Join(quoted, ", "))
+}
+
+func normalizeSeverity(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	switch value {
+	case "info", "informational":
+		return "info"
+	case "low", "medium", "high", "critical":
+		return value
+	default:
+		return ""
+	}
 }
 
 // RequestFilters define filtros para búsqueda

@@ -45,9 +45,9 @@ Client-Side & APIs:
 - GraphQL: introspection habilitada, queries sin rate limiting, batch attacks
 - APIs: endpoints sin documentación, versiones deprecadas activas
 
-**Skill dedicado para interceptación activa: `request-interception-manipulation`**
+**Skill dedicado para mapeo de superficie: `browser-api-mapping`**
 
-Activá este skill cuando necesites evidencia dinámica de auth/authz, IDOR, CSRF, JWT o DOM XSS. El skill usa chrome-devtools MCP con flujo específico:
+Activá este skill cuando necesites inventario dinámico de superficie web y, si hace falta validación acotada, pasá luego a `proxy-capture-replay` o al proxy MCP standalone.
 
 ```
 FASE 1 — Captura:
@@ -78,7 +78,7 @@ FASE 5 — Evidencia:
 
 **Cuándo activar el skill vs. solo listar:**
 - `chrome-devtools_list_network_requests()` → siempre al inicio para mapear superficie
-- `request-interception-manipulation` skill → solo cuando necesitás modificar y reenviar para validar una hipótesis específica (auth bypass, IDOR, CSRF, JWT, race condition)
+- `browser-api-mapping` → siempre al inicio para mapear superficie y capturar tráfico
 
 Headers de seguridad:
 - CSP, HSTS, X-Frame-Options, Referrer-Policy, CORP/COOP/COEP
@@ -100,4 +100,4 @@ memory.save({
 
 Límite: No ejecutés payloads destructivos. Con chrome-devtools podés hacer validación ofensiva acotada dentro del navegador si está autorizada y el impacto es mínimo; si necesitás algo más intrusivo, marcá status: 'suspected' y pedí autorización explícita.
 
-Skills activas: web-triage, web-js-intel, advanced-auth-bypass, file-upload-attacks, deserialization-attacks, authorization-guard, request-interception-manipulation, websocket-security, jwt-jwks-analysis
+Skills activas: web-triage, web-js-intel, advanced-auth-bypass, file-upload-attacks, deserialization-attacks, authorization-guard, browser-api-mapping, proxy-capture-replay

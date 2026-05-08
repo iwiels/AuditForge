@@ -29,7 +29,7 @@
 - `chrome-devtools_evaluate_script()` - ejecutar JavaScript para monkey-patching de fetch/XHR
 - `chrome-devtools_take_snapshot()` - estado del DOM para evidence
 - `chrome-devtools_take_screenshot()` - captura visual con marcadores
-- Skills: `browser-api-mapping`, `request-interception-manipulation`, `proxy-capture-replay`
+- Skills: `browser-api-mapping`, `proxy-capture-replay`
 
 ## Phase 4 - API / Parameter Discovery
 

@@ -1,6 +1,6 @@
 # Skill: AuditForge Proxy Integration
 
-**Categoría:** proxy, interception, replay
+**Categoría:** proxy, interception, capture
 **Metodología base:** OWASP WSTG-CRYP, WSTG-ATHN, WSTG-ATHZ
 **Cuándo activar:** cuando se necesita interceptación fuera del browser, análisis de APIs nativas, o pruebas multi-aplicación
 **MCP requerido:** `auditforge-proxy` (servidor MCP standalone)
@@ -17,9 +17,12 @@
          ↑                       ↓
   HTTP_PROXY=localhost:8080   MCP Tools:
                                 - proxy.intercept.enable()
+                                - proxy.history.search()
                                 - proxy.request.modify()
-                                - proxy.replay.execute()
+                                - proxy.request.forward()
+                                - proxy.request.drop()
                                 - proxy.findings.list()
+                                - proxy.export.har()
 ```
 
 ---
@@ -194,66 +197,7 @@ await proxy.request.modify({
 
 ---
 
-## Fase 3: Smart Replay Engine
-
-### Replay Simple con Modificaciones
-
-```javascript
-// Replicar un request con cambios
-proxy.replay.execute({
-  request_id: "abc-123",
-  modifications: {
-    headers: {
-      "Authorization": "Bearer ADMIN_TOKEN"
-    },
-    body_params: {
-      "user_id": "999"
-    }
-  },
-  times: 1
-})
-```
-
-### Replay Masivo para Race Conditions
-
-```javascript
-// Enviar 10 requests concurrentes para test de race condition
-proxy.replay.execute({
-  request_id: "coupon-redeem-req",
-  modifications: {},
-  times: 10,
-  concurrent: true
-})
-```
-
-### Generar Variaciones Automáticas
-
-```javascript
-// El Smart Replay Engine puede generar mutaciones automáticas:
-// - ID fuzzing (IDOR)
-// - Role header injection
-// - Auth token removal
-// - Path traversal
-
-// Esto se activa automáticamente cuando hay múltiples replays
-// con diferentes mutaciones
-```
-
----
-
-## Fase 4: Análisis Diferencial
-
-### Comparar Respuestas
-
-El Smart Replay Engine detecta automáticamente:
-
-| Indicador | Descripción | Severidad |
-|-----------|-------------|-----------|
-| `status_code_change` | 403→200 indica bypass | CRITICAL |
-| `idor_data_access` | Acceso a datos con ID diferente | HIGH |
-| `schema_field_leak` | Campos extra en respuesta | MEDIUM |
-| `timing_side_channel` | Diferencia de tiempo >500ms | LOW |
-| `error_info_disclosure` | Stack traces o paths en errores | MEDIUM |
+## Fase 3: Análisis y Validación Manual
 
 ### Revisar Hallazgos
 
@@ -358,13 +302,12 @@ proxy.websocket.intercept({
 security-scout → Identifica endpoints de API
        ↓
 security-web → Usa auditforge-proxy para:
-               - Capturar tráfico real de la app
-               - Interceptar y modificar requests
-               - Ejecutar smart replay
-       ↓
-security-code → Recibe findings del replay engine
-                - Busca handlers en el código
-                - Valida fix de vulnerabilidades
+                - Capturar tráfico real de la app
+                - Interceptar y modificar requests
+                ↓
+security-code → Recibe findings del proxy
+                 - Busca handlers en el código
+                 - Valida fix de vulnerabilidades
        ↓
 security-report → Consolida findings del proxy
 ```

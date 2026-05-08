@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -81,14 +80,6 @@ func (m *MCPServerTools) RegisterTools(s *server.MCPServer) {
 		mcp.WithObject("filters", mcp.Description("Filters for which responses to intercept")),
 	), m.handleResponseIntercept)
 
-	// Tool: proxy.replay.execute
-	s.AddTool(mcp.NewTool("proxy.replay.execute",
-		mcp.WithDescription("Replay a request with optional modifications"),
-		mcp.WithString("request_id", mcp.Required(), mcp.Description("Base request ID to replay")),
-		mcp.WithObject("modifications", mcp.Description("Modifications to apply")),
-		mcp.WithNumber("times", mcp.Description("Number of times to replay"), mcp.DefaultNumber(1)),
-	), m.handleReplayExecute)
-
 	// Tool: proxy.stats.get
 	s.AddTool(mcp.NewTool("proxy.stats.get",
 		mcp.WithDescription("Get proxy statistics and metrics"),
@@ -109,10 +100,18 @@ func (m *MCPServerTools) RegisterTools(s *server.MCPServer) {
 	), m.handleExportHAR)
 }
 
+func requestArgs(request mcp.CallToolRequest) map[string]any {
+	args, ok := request.Params.Arguments.(map[string]any)
+	if !ok || args == nil {
+		return map[string]any{}
+	}
+	return args
+}
+
 // Handlers
 
 func (m *MCPServerTools) handleInterceptEnable(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args := request.Params.Arguments
+	args := requestArgs(request)
 
 	var filters []InterceptFilter
 	if filtersData, ok := args["filters"].(map[string]interface{}); ok {
@@ -141,7 +140,7 @@ func (m *MCPServerTools) handleInterceptDisable(ctx context.Context, request mcp
 }
 
 func (m *MCPServerTools) handleHistorySearch(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args := request.Params.Arguments
+	args := requestArgs(request)
 	filters := RequestFilters{Limit: 50}
 
 	if host, ok := args["host"].(string); ok {
@@ -179,7 +178,7 @@ func (m *MCPServerTools) handleHistorySearch(ctx context.Context, request mcp.Ca
 }
 
 func (m *MCPServerTools) handleRequestGet(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args := request.Params.Arguments
+	args := requestArgs(request)
 	requestID := args["request_id"].(string)
 
 	rr, err := m.proxy.storage.GetRequest(requestID)
@@ -239,7 +238,7 @@ func (m *MCPServerTools) handleRequestPause(ctx context.Context, request mcp.Cal
 }
 
 func (m *MCPServerTools) handleRequestModify(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args := request.Params.Arguments
+	args := requestArgs(request)
 	requestID := args["request_id"].(string)
 
 	action := &InterceptAction{
@@ -266,7 +265,7 @@ func (m *MCPServerTools) handleRequestModify(ctx context.Context, request mcp.Ca
 }
 
 func (m *MCPServerTools) handleRequestForward(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args := request.Params.Arguments
+	args := requestArgs(request)
 	requestID := args["request_id"].(string)
 
 	action := &InterceptAction{
@@ -282,7 +281,7 @@ func (m *MCPServerTools) handleRequestForward(ctx context.Context, request mcp.C
 }
 
 func (m *MCPServerTools) handleRequestDrop(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args := request.Params.Arguments
+	args := requestArgs(request)
 	requestID := args["request_id"].(string)
 
 	action := &InterceptAction{
@@ -299,29 +298,6 @@ func (m *MCPServerTools) handleRequestDrop(ctx context.Context, request mcp.Call
 
 func (m *MCPServerTools) handleResponseIntercept(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return mcp.NewToolResultText("ℹ️ Response interception enabled for matching requests"), nil
-}
-
-func (m *MCPServerTools) handleReplayExecute(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args := request.Params.Arguments
-	requestID := args["request_id"].(string)
-
-	rr, err := m.proxy.storage.GetRequest(requestID)
-	if err != nil {
-		return nil, fmt.Errorf("request not found: %w", err)
-	}
-
-	// Aquí se integraría con el Smart Replay Engine
-	output := fmt.Sprintf("🔄 Replaying request %s\n", requestID[:8])
-	output += fmt.Sprintf("   %s %s\n", rr.Method, rr.URL)
-
-	if modifications, ok := args["modifications"].(map[string]interface{}); ok {
-		output += "\n📝 Modifications applied:\n"
-		for k, v := range modifications {
-			output += fmt.Sprintf("   %s: %v\n", k, v)
-		}
-	}
-
-	return mcp.NewToolResultText(output), nil
 }
 
 func (m *MCPServerTools) handleStatsGet(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -348,7 +324,7 @@ Severity Distribution:
 }
 
 func (m *MCPServerTools) handleFindingsList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args := request.Params.Arguments
+	args := requestArgs(request)
 	filters := FindingFilters{}
 
 	if severity, ok := args["severity"].(string); ok {
@@ -378,7 +354,7 @@ func (m *MCPServerTools) handleFindingsList(ctx context.Context, request mcp.Cal
 }
 
 func (m *MCPServerTools) handleExportHAR(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args := request.Params.Arguments
+	args := requestArgs(request)
 	outputPath := args["output_path"].(string)
 
 	// Implementar exportación HAR

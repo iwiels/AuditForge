@@ -2,7 +2,6 @@ package app
 
 import "orquestador-auditor/internal/cli"
 
-func Run(version string) error {
-	_ = version
+func Run() error {
 	return cli.RunFromOSArgs()
 }

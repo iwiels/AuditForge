@@ -283,7 +283,7 @@ if exist "%AUDITFORGE_DIR%\proxy\auditforge-proxy.exe" (
     echo   To start: %AUDITFORGE_DIR%\proxy\start-proxy.bat
     echo.
     echo   MCP Tools Available:
-    echo     • proxy.intercept.enable	echo     • proxy.history.search	echo     • proxy.request.modify	echo     • proxy.replay.execute	echo     • proxy.findings.list	echo.
+    echo     • proxy.intercept.enable	echo     • proxy.history.search	echo     • proxy.request.modify	echo     • proxy.findings.list	echo.
 ) else (
     echo   [WARNING] Proxy server not built. Install Go and re-run with --proxy
 )

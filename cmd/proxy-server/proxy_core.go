@@ -1,28 +1,29 @@
 package main
 
 import (
-	"context"
+	"bufio"
+	"bytes"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
-	"encoding/json"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"os"
-	"os/signal"
-	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
-	"github.com/mattn/go-sqlite3"
 )
 
 // RequestResponse representa un par request/response interceptado
@@ -57,25 +58,89 @@ type InterceptedRequest struct {
 type ProxyServer struct {
 	addr           string
 	caCert         tls.Certificate
-	db             *sql.DB
+	caLeaf         *x509.Certificate
+	leafKey        crypto.Signer
 	storage        *ProxyStorage
 	interceptor    *Interceptor
+	stateMu        sync.RWMutex
 	mutex          sync.RWMutex
+	listener       net.Listener
 	interceptedReq map[string]*InterceptedRequest
+	certMu         sync.RWMutex
+	certCache      map[string]*tls.Certificate
 	isRunning      bool
 	logger         *log.Logger
 }
 
+type bufferedConn struct {
+	net.Conn
+	reader *bufio.Reader
+}
+
+func newBufferedConn(conn net.Conn, reader *bufio.Reader) net.Conn {
+	if reader == nil {
+		return conn
+	}
+	return &bufferedConn{Conn: conn, reader: reader}
+}
+
+// removeHopHeaders removes hop-by-hop headers from the given Header.
+// See RFC 2616 section 13.5.1 for the list of hop-by-hop headers.
+func removeHopHeaders(header http.Header) {
+	hopHeaders := []string{
+		"Connection",
+		"Keep-Alive",
+		"Proxy-Authenticate",
+		"Proxy-Authorization",
+		"TE",
+		"Trailers",
+		"Transfer-Encoding",
+		"Upgrade",
+		"Proxy-Connection", // non-standard but common
+	}
+
+	for _, h := range hopHeaders {
+		header.Del(h)
+	}
+}
+
+func (c *bufferedConn) Read(p []byte) (int, error) {
+	if c.reader != nil {
+		if c.reader.Buffered() > 0 {
+			return c.reader.Read(p)
+		}
+		c.reader = nil
+	}
+	return c.Conn.Read(p)
+}
+
 // NewProxyServer crea una nueva instancia del proxy
-func NewProxyServer(addr string, caCertPath, caKeyPath string) (*ProxyServer, error) {
+func NewProxyServer(addr string, caCertPath, caKeyPath, dbPath string) (*ProxyServer, error) {
 	// Cargar certificado CA
 	cert, err := tls.LoadX509KeyPair(caCertPath, caKeyPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load CA certificate: %w", err)
 	}
+	if len(cert.Certificate) == 0 {
+		return nil, fmt.Errorf("failed to parse CA certificate chain")
+	}
+	caLeaf, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse CA leaf certificate: %w", err)
+	}
+	if _, ok := cert.PrivateKey.(crypto.Signer); !ok {
+		return nil, fmt.Errorf("CA private key does not implement crypto.Signer")
+	}
+	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate leaf key: %w", err)
+	}
 
 	// Inicializar storage
-	storage, err := NewProxyStorage("./auditforge-proxy.db")
+	if strings.TrimSpace(dbPath) == "" {
+		dbPath = "./auditforge-proxy.db"
+	}
+	storage, err := NewProxyStorage(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize storage: %w", err)
 	}
@@ -83,29 +148,45 @@ func NewProxyServer(addr string, caCertPath, caKeyPath string) (*ProxyServer, er
 	return &ProxyServer{
 		addr:           addr,
 		caCert:         cert,
+		caLeaf:         caLeaf,
+		leafKey:        leafKey,
 		storage:        storage,
 		interceptor:    NewInterceptor(),
 		interceptedReq: make(map[string]*InterceptedRequest),
-		logger:         log.New(os.Stdout, "[PROXY] ", log.LstdFlags),
+		certCache:      make(map[string]*tls.Certificate),
+		logger:         log.New(os.Stderr, "[PROXY] ", log.LstdFlags),
 	}, nil
 }
 
 // Start inicia el servidor proxy
 func (p *ProxyServer) Start() error {
+	p.stateMu.Lock()
+	if p.isRunning {
+		p.stateMu.Unlock()
+		return nil
+	}
+	p.stateMu.Unlock()
+
 	listener, err := net.Listen("tcp", p.addr)
 	if err != nil {
 		return fmt.Errorf("failed to start listener: %w", err)
 	}
 
+	p.stateMu.Lock()
+	p.listener = listener
 	p.isRunning = true
+	p.stateMu.Unlock()
 	p.logger.Printf("Proxy server listening on %s", p.addr)
 
 	go func() {
-		for p.isRunning {
+		for {
 			conn, err := listener.Accept()
 			if err != nil {
-				if p.isRunning {
+				if p.isRunningLocked() {
 					p.logger.Printf("Accept error: %v", err)
+				}
+				if errors.Is(err, net.ErrClosed) || !p.isRunningLocked() {
+					return
 				}
 				continue
 			}
@@ -117,83 +198,216 @@ func (p *ProxyServer) Start() error {
 }
 
 // Stop detiene el servidor proxy
-func (p *ProxyServer) Stop() {
+func (p *ProxyServer) Stop() error {
+	p.stateMu.Lock()
+	if !p.isRunning && p.listener == nil {
+		storage := p.storage
+		p.stateMu.Unlock()
+		if storage != nil {
+			return storage.Close()
+		}
+		return nil
+	}
+	listener := p.listener
+	storage := p.storage
 	p.isRunning = false
-	p.storage.Close()
+	p.listener = nil
+	p.stateMu.Unlock()
+
+	var errs []error
+	if listener != nil {
+		if err := listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+			errs = append(errs, err)
+		}
+	}
+	if storage != nil {
+		if err := storage.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) == 0 {
+		return nil
+	}
+	return errors.Join(errs...)
+}
+
+func (p *ProxyServer) isRunningLocked() bool {
+	p.stateMu.RLock()
+	defer p.stateMu.RUnlock()
+	return p.isRunning
+}
+
+// normalizeHostForCert devuelve el host normalizado para usar en un certificado (sin puerto, IPv6 sin corchetes).
+func normalizeHostForCert(host string) string {
+	// Eliminar espacios y convertir a minúsculas
+	host = strings.TrimSpace(strings.ToLower(host))
+	if host == "" {
+		return ""
+	}
+	// Si es una dirección IPv6 entre corchetes, extraer la dirección
+	if strings.HasPrefix(host, "[") {
+		if end := strings.Index(host, "]"); end != -1 {
+			host = host[1:end]
+		}
+	}
+	// Eliminar el puerto si está presente
+	if host, _, err := net.SplitHostPort(host); err == nil {
+		return host
+	}
+	// Si no hay puerto, devolver el host tal cual
+	return host
+}
+
+func (p *ProxyServer) certificateForHost(host string) (*tls.Certificate, error) {
+	host = normalizeHostForCert(host)
+	if host == "" {
+		return nil, fmt.Errorf("missing SNI host")
+	}
+
+	p.certMu.RLock()
+	if cert, ok := p.certCache[host]; ok {
+		p.certMu.RUnlock()
+		return cert, nil
+	}
+	p.certMu.RUnlock()
+
+	if p.caLeaf == nil || p.caCert.PrivateKey == nil {
+		return nil, fmt.Errorf("CA certificate is not initialized")
+	}
+	if leaf, ok := p.caCert.PrivateKey.(crypto.Signer); ok {
+		_ = leaf
+	}
+
+	serialLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serial, err := rand.Int(rand.Reader, serialLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject: pkix.Name{
+			CommonName:   host,
+			Organization: []string{"AuditForge MITM"},
+		},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		DNSNames:              []string{host},
+		PublicKeyAlgorithm:    x509.ECDSA,
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, p.caLeaf, p.leafKey.Public(), p.caCert.PrivateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	leaf, err := x509.ParseCertificate(der)
+	if err != nil {
+		return nil, err
+	}
+
+	cert := &tls.Certificate{
+		Certificate: [][]byte{der, p.caCert.Certificate[0]},
+		PrivateKey:   p.leafKey,
+		Leaf:         leaf,
+	}
+
+	p.certMu.Lock()
+	p.certCache[host] = cert
+	p.certMu.Unlock()
+
+	return cert, nil
+}
+
+func (p *ProxyServer) dialUpstreamHTTP(host string) (net.Conn, error) {
+	dialer := &net.Dialer{Timeout: 30 * time.Second}
+	return dialer.Dial("tcp", host)
+}
+
+func (p *ProxyServer) dialUpstreamTLS(host string) (net.Conn, error) {
+	rootCAs, err := x509.SystemCertPool()
+	if err != nil || rootCAs == nil {
+		rootCAs = x509.NewCertPool()
+	}
+	if host == "" {
+		return nil, fmt.Errorf("missing upstream host")
+	}
+	serverName := host
+	if parsedHost, _, splitErr := net.SplitHostPort(host); splitErr == nil {
+		serverName = parsedHost
+	}
+	return tls.DialWithDialer(&net.Dialer{Timeout: 30 * time.Second}, "tcp", host, &tls.Config{
+		RootCAs:    rootCAs,
+		ServerName: serverName,
+	})
 }
 
 // handleConnection maneja una conexión entrante
 func (p *ProxyServer) handleConnection(clientConn net.Conn) {
 	defer clientConn.Close()
 
-	// Leer el primer byte para detectar si es HTTPS (CONNECT)
-	buf := make([]byte, 1)
-	if _, err := clientConn.Read(buf); err != nil {
-		return
-	}
-
-	// Si es CONNECT, manejar HTTPS
-	if buf[0] == 0x43 { // 'C' de CONNECT
-		p.handleHTTPS(clientConn)
-	} else {
-		// HTTP normal
-		p.handleHTTP(clientConn, buf)
-	}
-}
-
-// handleHTTPS maneja conexiones HTTPS (MITM)
-func (p *ProxyServer) handleHTTPS(clientConn net.Conn) {
-	// Leer el método CONNECT completo
-	reader := bufio.NewReader(io.MultiReader(bytes.NewReader([]byte{0x43}), clientConn))
+	reader := bufio.NewReader(clientConn)
 	req, err := http.ReadRequest(reader)
 	if err != nil {
 		return
 	}
 
-	host := req.Host
-	if !strings.Contains(host, ":") {
-		host += ":443"
+	if strings.EqualFold(req.Method, http.MethodConnect) {
+		p.handleHTTPS(clientConn, reader, req)
+		return
 	}
 
-	// Responder 200 Connection Established
-	fmt.Fprintf(clientConn, "HTTP/1.1 200 Connection established\r\n\r\n")
+	p.handleHTTP(clientConn, req)
+}
 
-	// Realizar handshake TLS con el cliente usando certificado dinámico
-	tlsConfig := &tls.Config{
-		Certificates:       []tls.Certificate{p.caCert},
-		InsecureSkipVerify: true,
+// handleHTTPS maneja conexiones HTTPS (MITM)
+func (p *ProxyServer) handleHTTPS(clientConn net.Conn, reader *bufio.Reader, req *http.Request) {
+	connectHost := req.Host
+	if connectHost == "" {
+		return
 	}
 
-	tlsConn := tls.Server(clientConn, tlsConfig)
+	if !strings.Contains(connectHost, ":") {
+		connectHost += ":443"
+	}
+
+	if _, err := fmt.Fprintf(clientConn, "HTTP/1.1 200 Connection established\r\n\r\n"); err != nil {
+		return
+	}
+
+	wrappedConn := newBufferedConn(clientConn, reader)
+	tlsConn := tls.Server(wrappedConn, &tls.Config{
+		GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			serverName := strings.TrimSpace(hello.ServerName)
+			if serverName == "" {
+				serverName = strings.TrimSuffix(req.Host, ":443")
+				if serverName == "" {
+					serverName = strings.TrimSuffix(connectHost, ":443")
+				}
+			}
+			cert, err := p.certificateForHost(serverName)
+			if err != nil {
+				return nil, err
+			}
+			return cert, nil
+		},
+	})
 	if err := tlsConn.Handshake(); err != nil {
 		return
 	}
 	defer tlsConn.Close()
 
-	// Conectar al servidor destino
-	serverConn, err := tls.Dial("tcp", host, &tls.Config{InsecureSkipVerify: true})
+	serverConn, err := p.dialUpstreamTLS(connectHost)
 	if err != nil {
+		p.logger.Printf("upstream TLS dial failed for %s: %v", connectHost, err)
 		return
 	}
 	defer serverConn.Close()
 
-	// Proxy bidireccional
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	// Cliente -> Servidor
-	go func() {
-		defer wg.Done()
-		p.proxyHTTPSRequest(tlsConn, serverConn)
-	}()
-
-	// Servidor -> Cliente
-	go func() {
-		defer wg.Done()
-		io.Copy(tlsConn, serverConn)
-	}()
-
-	wg.Wait()
+	p.proxyHTTPSRequest(tlsConn, serverConn)
 }
 
 // proxyHTTPSRequest procesa requests HTTPS
@@ -217,23 +431,21 @@ func (p *ProxyServer) proxyHTTPSRequest(clientConn, serverConn net.Conn) {
 }
 
 // handleHTTP maneja requests HTTP
-func (p *ProxyServer) handleHTTP(clientConn net.Conn, firstByte []byte) {
-	reader := bufio.NewReader(io.MultiReader(bytes.NewReader(firstByte), clientConn))
-	req, err := http.ReadRequest(reader)
-	if err != nil {
-		return
-	}
-
+func (p *ProxyServer) handleHTTP(clientConn net.Conn, req *http.Request) {
 	reqResp := p.createRequestResponse(req)
 
-	// Conectar al servidor destino
 	host := req.Host
+	if host == "" {
+		p.sendErrorResponse(clientConn, http.StatusBadRequest, "Missing Host header")
+		return
+	}
 	if !strings.Contains(host, ":") {
 		host += ":80"
 	}
 
-	serverConn, err := net.Dial("tcp", host)
+	serverConn, err := p.dialUpstreamHTTP(host)
 	if err != nil {
+		p.logger.Printf("upstream HTTP dial failed for %s: %v", host, err)
 		return
 	}
 	defer serverConn.Close()
@@ -285,7 +497,9 @@ func (p *ProxyServer) handleInterceptedRequest(reqResp *RequestResponse, req *ht
 	p.mutex.Unlock()
 
 	// Guardar en storage
-	p.storage.SaveRequest(reqResp)
+	if err := p.storage.SaveRequest(reqResp); err != nil {
+		p.logger.Printf("failed to save intercepted request: %v", err)
+	}
 
 	p.logger.Printf("[INTERCEPTED] %s %s (ID: %s)", req.Method, req.URL, reqResp.ID)
 
@@ -305,11 +519,17 @@ func (p *ProxyServer) handleInterceptedRequest(reqResp *RequestResponse, req *ht
 	p.mutex.Lock()
 	delete(p.interceptedReq, reqResp.ID)
 	p.mutex.Unlock()
+
+	// Limpiar el canal de acción del interceptor para evitar fugas de goroutines
+	p.interceptor.RemoveActionChannel(reqResp.ID)
 }
 
 // forwardRequest envía el request al servidor y retorna la respuesta
 func (p *ProxyServer) forwardRequest(reqResp *RequestResponse, req *http.Request, serverConn net.Conn, clientConn net.Conn) {
 	start := time.Now()
+
+	// Eliminar encabezados hop-by-hop antes de reenviar
+	removeHopHeaders(req.Header)
 
 	// Enviar request al servidor
 	if err := req.Write(serverConn); err != nil {
@@ -326,6 +546,9 @@ func (p *ProxyServer) forwardRequest(reqResp *RequestResponse, req *http.Request
 	}
 	defer resp.Body.Close()
 
+	// Eliminar encabezados hop-by-hop de la respuesta antes de enviar al cliente
+	removeHopHeaders(resp.Header)
+
 	// Capturar respuesta
 	body, _ := io.ReadAll(resp.Body)
 	reqResp.ResponseStatus = resp.StatusCode
@@ -339,7 +562,9 @@ func (p *ProxyServer) forwardRequest(reqResp *RequestResponse, req *http.Request
 	reqResp.ResponseHeaders = respHeaders
 
 	// Guardar en storage
-	p.storage.SaveRequest(reqResp)
+	if err := p.storage.SaveRequest(reqResp); err != nil {
+		p.logger.Printf("failed to save request: %v", err)
+	}
 
 	// Enviar respuesta al cliente
 	resp.Body = io.NopCloser(bytes.NewReader(body))
@@ -360,14 +585,27 @@ func (p *ProxyServer) forwardModifiedRequest(reqResp *RequestResponse, action *I
 	reqResp.InterceptAction = action.Action
 
 	// Reconstruir request
-	url, _ := url.Parse(reqResp.URL)
-	req, _ := http.NewRequest(reqResp.Method, reqResp.URL, bytes.NewReader(reqResp.RequestBody))
+	url, err := url.Parse(reqResp.URL)
+	if err != nil {
+		p.logger.Printf("failed to parse URL: %v", err)
+		p.sendErrorResponse(clientConn, 400, "Bad Request")
+		return
+	}
+	req, err := http.NewRequest(reqResp.Method, reqResp.URL, bytes.NewReader(reqResp.RequestBody))
+	if err != nil {
+		p.logger.Printf("failed to create request: %v", err)
+		p.sendErrorResponse(clientConn, 400, "Bad Request")
+		return
+	}
 	req.URL = url
 	req.Host = reqResp.Host
 
 	for name, value := range reqResp.RequestHeaders {
 		req.Header.Set(name, value)
 	}
+
+	// Eliminar encabezados hop-by-hop antes de reenviar
+	removeHopHeaders(req.Header)
 
 	p.forwardRequest(reqResp, req, serverConn, clientConn)
 }
@@ -484,4 +722,11 @@ func (i *Interceptor) SendAction(requestID string, action *InterceptAction) erro
 
 	ch <- action
 	return nil
+}
+
+// RemoveActionChannel elimina el canal de acciones para un request.
+func (i *Interceptor) RemoveActionChannel(requestID string) {
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
+	delete(i.actionChans, requestID)
 }

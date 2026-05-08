@@ -13,12 +13,12 @@
 
 Mapear la superficie de API expuesta por el cliente (endpoints, parámetros, headers, esquemas) mediante ejecución de navegador e interceptación de tráfico. Generar un inventario estructurado para correlación con hallazgos de security-scout y para alimentación de security-code.
 
-### Diferencia con request-interception-manipulation
+### Diferencia con validación activa
 
-| Aspecto | browser-api-mapping | request-interception-manipulation |
-|---------|---------------------|-----------------------------------|
-| Objetivo | Inventario y descubrimiento | Validación activa de hipótesis |
-| Modificación | Solo lectura y captura | Manipulación y replay |
+| Aspecto | browser-api-mapping | validación activa |
+|---------|---------------------|-------------------|
+| Objetivo | Inventario y descubrimiento | Validación de hipótesis |
+| Modificación | Solo lectura y captura | Manipulación controlada |
 | Resultado | Mapa de API (OpenAPI/HAR) | Evidencia de vulnerabilidad |
 | Timing | temprano en el análisis | cuando ya hay hipótesis confirmada |
 
@@ -370,7 +370,7 @@ chrome-devtools_evaluate_script({
 ## Integración con Team
 
 - **security-scout** → pasa URL inicial y archivos JS descubiertos
-- **security-web** → usa este skill para enriquecer superficie, pasa endpoints a request-interception-manipulation para validación
+- **security-web** → usa este skill para enriquecer superficie y pasar endpoints a validación acotada posterior
 - **security-code** → recibe inventario de endpoints y puede identificar handlers correspondientes en código fuente
 
 ## Checklist de Cierre

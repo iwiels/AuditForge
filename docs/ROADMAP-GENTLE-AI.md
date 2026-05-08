@@ -103,7 +103,7 @@ type JudgmentResult struct {
 
 ### 2.1 Real Agent Orchestrator
 **Problema:** AGENTS.md documenta el equipo pero no hay motor de ejecución.  
-**Solución:** `internal/orchestrator/agent_runner.go`
+**Solución:** runtime interno de equipo dentro del orquestador
 
 ```go
 type AgentOrchestrator struct {

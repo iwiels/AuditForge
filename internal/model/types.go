@@ -10,12 +10,6 @@ const (
 	AgentGemini     AgentID = "gemini"
 )
 
-type SupportTier string
-
-const (
-	TierFull SupportTier = "full"
-)
-
 type ComponentID string
 
 const (
@@ -46,7 +40,6 @@ const (
 	SkillJSDeobfuscationIntel            SkillID = "js-deobfuscation-intel"
 	SkillBrowserAPIMapping               SkillID = "browser-api-mapping"
 	SkillProxyCaptureReplay              SkillID = "proxy-capture-replay"
-	SkillRequestInterceptionManipulation SkillID = "request-interception-manipulation"
 	SkillAPISchemaHarvest                SkillID = "api-schema-harvest"
 	SkillAPIParameterMapping             SkillID = "api-parameter-mapping"
 	SkillParamDiscoveryFuzz              SkillID = "param-discovery-fuzz"
@@ -61,42 +54,7 @@ const (
 	SkillAdvancedAuthBypass              SkillID = "advanced-auth-bypass"
 	SkillFileUploadAttacks               SkillID = "file-upload-attacks"
 	SkillDeserializationAttacks          SkillID = "deserialization-attacks"
-	SkillWebSocketSecurity               SkillID = "websocket-security"
-	SkillJWTJWKSAnalysis                 SkillID = "jwt-jwks-analysis"
 )
-
-type PersonaID string
-
-const (
-	PersonaAnalyst           PersonaID = "analyst"
-	PersonaRedTeamBounded    PersonaID = "red-team-bounded"
-	PersonaExecutiveReporter PersonaID = "executive-reporter"
-)
-
-type PresetID string
-
-const (
-	PresetSurfaceAudit PresetID = "surface-audit"
-	PresetDeepAudit    PresetID = "deep-audit"
-	PresetForensics    PresetID = "forensics"
-	PresetCustom       PresetID = "custom"
-)
-
-type AuditModeID string
-
-const (
-	AuditModeSingleTarget AuditModeID = "single-target"
-	AuditModeCampaign     AuditModeID = "campaign"
-)
-
-type Profile struct {
-	Name       string
-	Preset     PresetID
-	Persona    PersonaID
-	Skills     []SkillID
-	Components []ComponentID
-	Mode       AuditModeID
-}
 
 type AuditProfileID string
 
